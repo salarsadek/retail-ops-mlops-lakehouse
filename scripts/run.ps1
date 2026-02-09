@@ -1,6 +1,6 @@
 ﻿param(
   [Parameter(Mandatory=$true)]
-  [ValidateSet("qa","test","format","lint")]
+  [ValidateSet("qa","test","format","lint","cfg","ensure-dirs")]
   [string]$Task
 )
 
@@ -26,5 +26,13 @@ switch ($Task) {
     ruff format .
     ruff check .
     pytest -q
+  }
+  "cfg" {
+    Info "Showing resolved config paths..."
+    python -m retail_ops_mlops show-paths
+  }
+  "ensure-dirs" {
+    Info "Ensuring directories exist..."
+    python -m retail_ops_mlops ensure-dirs
   }
 }

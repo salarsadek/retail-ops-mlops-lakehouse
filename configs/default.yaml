@@ -1,0 +1,21 @@
+﻿project:
+  name: retail-ops-mlops-lakehouse
+  env: local
+
+paths:
+  data_raw: data/raw
+  data_interim: data/interim
+  data_processed: data/processed
+
+  outputs: outputs
+  outputs_figures: outputs/figures
+  outputs_tables: outputs/tables
+  outputs_models: outputs/models
+  outputs_reports: outputs/reports
+
+logging:
+  level: INFO
+
+mlflow:
+  tracking_uri: "file:./outputs/mlruns"
+  experiment_name: "retail_ops"
