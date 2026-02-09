@@ -1,6 +1,6 @@
 ﻿param(
   [Parameter(Mandatory=$true)]
-  [ValidateSet("qa","test","format","lint","cfg","ensure-dirs")]
+  [ValidateSet("qa","test","format","lint","cfg","ensure-dirs","ingest-m5","ingest-m5-dry")]
   [string]$Task
 )
 
@@ -34,5 +34,13 @@ switch ($Task) {
   "ensure-dirs" {
     Info "Ensuring directories exist..."
     python -m retail_ops_mlops ensure-dirs
+  }
+  "ingest-m5-dry" {
+    Info "Running M5 ingest (non-strict) to produce a report even if zip is missing..."
+    python -m retail_ops_mlops ingest-m5 --no-strict
+  }
+  "ingest-m5" {
+    Info "Running M5 ingest (strict) ..."
+    python -m retail_ops_mlops ingest-m5
   }
 }
