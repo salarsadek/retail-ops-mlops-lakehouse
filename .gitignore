@@ -1,0 +1,20 @@
+﻿# venv / caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# outputs + data (keep .gitkeep)
+outputs/*
+!outputs/.gitkeep
+!outputs/**/.gitkeep
+
+data/*
+!data/.gitkeep
+!data/**/.gitkeep
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
