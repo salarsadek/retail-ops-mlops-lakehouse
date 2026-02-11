@@ -189,5 +189,25 @@ def gold_m5(
     rprint(f"[green]OK:[/green] wrote report: {report_path}")
 
 
+@app.command("dq-m5")
+def dq_m5(
+    config: Path = CONFIG_OPTION,
+    strict: bool = STRICT_OPTION,
+) -> None:
+    """Run data quality checks on M5 Gold tables and write a DQ report."""
+    cfg = load_config(config)
+    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
+
+    from retail_ops_mlops.pipelines.dq_m5 import run as dq_run
+
+    try:
+        report_path = dq_run(config_path=config, strict=strict)
+    except RuntimeError as err:
+        rprint(f"[red]ERROR:[/red] {err}")
+        raise typer.Exit(code=1) from err
+
+    rprint(f"[green]OK:[/green] wrote report: {report_path}")
+
+
 if __name__ == "__main__":
     app()
