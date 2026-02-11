@@ -18,3 +18,9 @@ data/*
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Secrets (never commit)
+**/kaggle.json
+.secrets/
+.env
+.env.*
