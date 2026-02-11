@@ -57,6 +57,27 @@ def ensure_dirs_cmd(config: Path = CONFIG_OPTION) -> None:
     rprint("[green]OK:[/green] ensured directories.")
 
 
+@app.command("download-m5")
+def download_m5(
+    config: Path = CONFIG_OPTION,
+    force: bool = FORCE_OPTION,
+    strict: bool = STRICT_OPTION,
+) -> None:
+    """Download the M5 Kaggle zip into data/raw/m5 and write a download report."""
+    cfg = load_config(config)
+    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
+
+    from retail_ops_mlops.pipelines.download_m5 import run as download_run
+
+    try:
+        report_path = download_run(config_path=config, force=force, strict=strict)
+    except RuntimeError as err:
+        rprint(f"[red]ERROR:[/red] {err}")
+        raise typer.Exit(code=1) from err
+
+    rprint(f"[green]OK:[/green] wrote report: {report_path}")
+
+
 @app.command("ingest-m5")
 def ingest_m5(
     config: Path = CONFIG_OPTION,
