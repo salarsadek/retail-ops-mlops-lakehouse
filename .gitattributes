@@ -10,3 +10,4 @@
 
 # PowerShell scripts should stay CRLF on Windows
 *.ps1  text eol=crlf
+Makefile text eol=lf
