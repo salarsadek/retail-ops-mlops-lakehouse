@@ -141,5 +141,26 @@ def silver_m5(
     rprint(f"[green]OK:[/green] wrote report: {report_path}")
 
 
+@app.command("gold-m5")
+def gold_m5(
+    config: Path = CONFIG_OPTION,
+    force: bool = FORCE_OPTION,
+    strict: bool = STRICT_OPTION,
+) -> None:
+    """Create Gold tables from Silver for M5 + write a report."""
+    cfg = load_config(config)
+    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
+
+    from retail_ops_mlops.pipelines.gold_m5 import run as gold_run
+
+    try:
+        report_path = gold_run(config_path=config, force=force, strict=strict)
+    except FileNotFoundError as err:
+        rprint(f"[red]ERROR:[/red] {err}")
+        raise typer.Exit(code=1) from err
+
+    rprint(f"[green]OK:[/green] wrote report: {report_path}")
+
+
 if __name__ == "__main__":
     app()
