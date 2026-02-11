@@ -57,6 +57,33 @@ def ensure_dirs_cmd(config: Path = CONFIG_OPTION) -> None:
     rprint("[green]OK:[/green] ensured directories.")
 
 
+@app.command("run-m5")
+def run_m5(
+    config: Path = CONFIG_OPTION,
+    zip_path: Path | None = ZIP_PATH_OPTION,
+    force: bool = FORCE_OPTION,
+    strict: bool = STRICT_OPTION,
+) -> None:
+    """Run full M5 pipeline: download -> ingest -> bronze -> silver -> gold."""
+    cfg = load_config(config)
+    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
+
+    from retail_ops_mlops.pipelines.run_m5 import run as run_pipeline
+
+    try:
+        report_path = run_pipeline(
+            config_path=config,
+            zip_path=zip_path,
+            force=force,
+            strict=strict,
+        )
+    except RuntimeError as err:
+        rprint(f"[red]ERROR:[/red] {err}")
+        raise typer.Exit(code=1) from err
+
+    rprint(f"[green]OK:[/green] wrote report: {report_path}")
+
+
 @app.command("download-m5")
 def download_m5(
     config: Path = CONFIG_OPTION,
