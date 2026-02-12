@@ -9,25 +9,48 @@ $ErrorActionPreference = "Stop"
 function Resolve-PythonExe {
   param([string]$Explicit)
 
+  # If user provided something, accept either:
+  #  - an existing file path
+  #  - a command name resolvable via Get-Command (python/python3/etc.)
   if ($Explicit) {
-    $p = [System.IO.Path]::GetFullPath($Explicit)
-    if (-not (Test-Path $p)) { throw "PythonExe not found: $p" }
-    return $p
+    if (Test-Path $Explicit) {
+      return [System.IO.Path]::GetFullPath($Explicit)
+    }
+    try {
+      return (Get-Command $Explicit -ErrorAction Stop).Source
+    } catch {
+      $p = [System.IO.Path]::GetFullPath($Explicit)
+      throw "PythonExe not found as path or command: '$Explicit' (resolved path tried: $p)"
+    }
   }
 
-  # 1) If venv is active, prefer that
+  # Prefer active venv if set (Windows + Linux)
   if ($env:VIRTUAL_ENV) {
-    $cand = Join-Path $env:VIRTUAL_ENV "Scripts\python.exe"
-    if (Test-Path $cand) { return $cand }
+    $cands = @(
+      (Join-Path $env:VIRTUAL_ENV "Scripts\python.exe"),
+      (Join-Path $env:VIRTUAL_ENV "Scripts\python"),
+      (Join-Path $env:VIRTUAL_ENV "bin/python"),
+      (Join-Path $env:VIRTUAL_ENV "bin/python3")
+    )
+    foreach ($c in $cands) { if (Test-Path $c) { return $c } }
   }
 
-  # 2) If repo has .venv, prefer that
+  # Prefer repo .venv (Windows + Linux)
   $repo = (Get-Location).Path
-  $cand2 = Join-Path $repo ".venv\Scripts\python.exe"
-  if (Test-Path $cand2) { return $cand2 }
+  $cands2 = @(
+    (Join-Path $repo ".venv\Scripts\python.exe"),
+    (Join-Path $repo ".venv\Scripts\python"),
+    (Join-Path $repo ".venv\bin\python"),
+    (Join-Path $repo ".venv\bin\python3")
+  )
+  foreach ($c in $cands2) { if (Test-Path $c) { return $c } }
 
-  # 3) Fallback to whatever "python" is
-  return (Get-Command python).Source
+  # Fallback: python3 then python
+  foreach ($name in @("python3", "python")) {
+    try { return (Get-Command $name -ErrorAction Stop).Source } catch { }
+  }
+
+  throw "Could not resolve a Python executable (tried venv + .venv + python3/python)."
 }
 
 function Invoke-Py {
