@@ -1,212 +1,92 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich import print as rprint
 
-from retail_ops_mlops.utils.config import ensure_dirs, load_config
-from retail_ops_mlops.utils.logging import setup_logging
-
 app = typer.Typer(no_args_is_help=True)
 
-# Create Typer OptionInfo objects once (avoids Ruff B008)
-CONFIG_OPTION = typer.Option(
-    "configs/default.yaml",
-    "--config",
-    "-c",
-    help="Path to YAML config file.",
-)
-STRICT_OPTION = typer.Option(
-    True,
-    "--strict/--no-strict",
-    help="Fail if required inputs are missing.",
-)
-FORCE_OPTION = typer.Option(
-    False,
-    "--force",
-    help="Overwrite existing outputs if they exist.",
-)
-ZIP_PATH_OPTION = typer.Option(
-    None,
-    "--zip-path",
-    help="Optional path to the Kaggle zip file (if not already in data/raw/m5).",
-)
+DEFAULT_CONFIG_PATH = Path("configs/default.yaml")
 
 
 @app.command("show-paths")
-def show_paths(config: Path = CONFIG_OPTION) -> None:
+def show_paths(
+    config: Annotated[Path, typer.Option("--config")] = DEFAULT_CONFIG_PATH,
+) -> None:
     """Print resolved absolute paths from the config."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
+    from retail_ops_mlops.utils.config import load_cfg
 
-    rprint(f"[bold]Config:[/bold] {cfg['config_path']}")
-    rprint(f"[bold]Project root:[/bold] {cfg['project_root']}\n")
-
-    rprint("[bold]Paths:[/bold]")
-    for k, p in cfg["paths"].items():
-        rprint(f"  - {k}: {p}")
+    cfg = load_cfg(config)
+    paths = cfg.get("paths", {})
+    rprint("[bold]paths[/bold]:")
+    for k, v in paths.items():
+        rprint(f"  - {k}: {Path(v).resolve()}")
 
 
 @app.command("ensure-dirs")
-def ensure_dirs_cmd(config: Path = CONFIG_OPTION) -> None:
+def ensure_dirs(
+    config: Annotated[Path, typer.Option("--config")] = DEFAULT_CONFIG_PATH,
+) -> None:
     """Create required data/outputs directories (idempotent)."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
-    ensure_dirs(cfg)
-    rprint("[green]OK:[/green] ensured directories.")
+    from retail_ops_mlops.utils.config import ensure_project_dirs, load_cfg
+
+    cfg = load_cfg(config)
+    ensure_project_dirs(cfg, root=Path.cwd())
+    rprint("[green]OK[/green]: ensured directories")
 
 
-@app.command("run-m5")
-def run_m5(
-    config: Path = CONFIG_OPTION,
-    zip_path: Path | None = ZIP_PATH_OPTION,
-    force: bool = FORCE_OPTION,
-    strict: bool = STRICT_OPTION,
+@app.command("build-features-m5")
+def build_features_m5(
+    config: Annotated[Path, typer.Option("--config")] = DEFAULT_CONFIG_PATH,
+    horizon: Annotated[int, typer.Option("--horizon")] = 28,
+    force: Annotated[bool, typer.Option("--force")] = False,
 ) -> None:
-    """Run full M5 pipeline: download -> ingest -> bronze -> silver -> gold."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
+    """Build M5 features table (gold) used by train/eval."""
+    from retail_ops_mlops.pipelines.build_features_m5 import run
 
-    from retail_ops_mlops.pipelines.run_m5 import run as run_pipeline
-
-    try:
-        report_path = run_pipeline(
-            config_path=config,
-            zip_path=zip_path,
-            force=force,
-            strict=strict,
-        )
-    except RuntimeError as err:
-        rprint(f"[red]ERROR:[/red] {err}")
-        raise typer.Exit(code=1) from err
-
-    rprint(f"[green]OK:[/green] wrote report: {report_path}")
-
-
-@app.command("download-m5")
-def download_m5(
-    config: Path = CONFIG_OPTION,
-    force: bool = FORCE_OPTION,
-    strict: bool = STRICT_OPTION,
-) -> None:
-    """Download the M5 Kaggle zip into data/raw/m5 and write a download report."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
-
-    from retail_ops_mlops.pipelines.download_m5 import run as download_run
-
-    try:
-        report_path = download_run(config_path=config, force=force, strict=strict)
-    except RuntimeError as err:
-        rprint(f"[red]ERROR:[/red] {err}")
-        raise typer.Exit(code=1) from err
-
-    rprint(f"[green]OK:[/green] wrote report: {report_path}")
-
-
-@app.command("ingest-m5")
-def ingest_m5(
-    config: Path = CONFIG_OPTION,
-    zip_path: Path | None = ZIP_PATH_OPTION,
-    strict: bool = STRICT_OPTION,
-) -> None:
-    """Ingest M5 zip into data/raw/m5 and write an ingest report."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
-
-    from retail_ops_mlops.pipelines.ingest_m5 import run as ingest_run
-
-    try:
-        report_path = ingest_run(config_path=config, zip_path=zip_path, strict=strict)
-    except FileNotFoundError as err:
-        rprint(f"[red]ERROR:[/red] {err}")
-        raise typer.Exit(code=1) from err
-
-    rprint(f"[green]OK:[/green] wrote report: {report_path}")
-
-
-@app.command("bronze-m5")
-def bronze_m5(
-    config: Path = CONFIG_OPTION,
-    force: bool = FORCE_OPTION,
-    strict: bool = STRICT_OPTION,
-) -> None:
-    """Convert raw extracted M5 CSVs into bronze Parquet files + write a report."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
-
-    from retail_ops_mlops.pipelines.bronze_m5 import run as bronze_run
-
-    try:
-        report_path = bronze_run(config_path=config, force=force, strict=strict)
-    except FileNotFoundError as err:
-        rprint(f"[red]ERROR:[/red] {err}")
-        raise typer.Exit(code=1) from err
-
-    rprint(f"[green]OK:[/green] wrote report: {report_path}")
-
-
-@app.command("silver-m5")
-def silver_m5(
-    config: Path = CONFIG_OPTION,
-    force: bool = FORCE_OPTION,
-    strict: bool = STRICT_OPTION,
-) -> None:
-    """Create typed Silver Parquet files from Bronze for M5 + write a report."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
-
-    from retail_ops_mlops.pipelines.silver_m5 import run as silver_run
-
-    try:
-        report_path = silver_run(config_path=config, force=force, strict=strict)
-    except (FileNotFoundError, RuntimeError) as err:
-        rprint(f"[red]ERROR:[/red] {err}")
-        raise typer.Exit(code=1) from err
-
-    rprint(f"[green]OK:[/green] wrote report: {report_path}")
-
-
-@app.command("gold-m5")
-def gold_m5(
-    config: Path = CONFIG_OPTION,
-    force: bool = FORCE_OPTION,
-    strict: bool = STRICT_OPTION,
-) -> None:
-    """Create Gold tables from Silver for M5 + write a report."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
-
-    from retail_ops_mlops.pipelines.gold_m5 import run as gold_run
-
-    try:
-        report_path = gold_run(config_path=config, force=force, strict=strict)
-    except FileNotFoundError as err:
-        rprint(f"[red]ERROR:[/red] {err}")
-        raise typer.Exit(code=1) from err
-
-    rprint(f"[green]OK:[/green] wrote report: {report_path}")
+    report = run(config_path=config, horizon=horizon, force=force)
+    rprint(f"[green]OK[/green]: wrote report: {report}")
 
 
 @app.command("dq-m5")
 def dq_m5(
-    config: Path = CONFIG_OPTION,
-    strict: bool = STRICT_OPTION,
+    config: Annotated[Path, typer.Option("--config")] = DEFAULT_CONFIG_PATH,
+    horizon: Annotated[int, typer.Option("--horizon")] = 28,
+    force: Annotated[bool, typer.Option("--force")] = False,
 ) -> None:
-    """Run data quality checks on M5 Gold tables and write a DQ report."""
-    cfg = load_config(config)
-    setup_logging(cfg.get("logging", {}).get("level", "INFO"))
+    """Run DQ checks for M5 features table (fails fast on bad data)."""
+    from retail_ops_mlops.pipelines.dq_m5 import run
 
-    from retail_ops_mlops.pipelines.dq_m5 import run as dq_run
+    report = run(config_path=config, horizon=horizon, force=force)
+    rprint(f"[green]OK[/green]: wrote report: {report}")
 
-    try:
-        report_path = dq_run(config_path=config, strict=strict)
-    except RuntimeError as err:
-        rprint(f"[red]ERROR:[/red] {err}")
-        raise typer.Exit(code=1) from err
 
-    rprint(f"[green]OK:[/green] wrote report: {report_path}")
+@app.command("train-m5")
+def train_m5(
+    config: Annotated[Path, typer.Option("--config")] = DEFAULT_CONFIG_PATH,
+    horizon: Annotated[int, typer.Option("--horizon")] = 28,
+    force: Annotated[bool, typer.Option("--force")] = False,
+) -> None:
+    """Train baseline model on M5 gold sample and write artifacts."""
+    from retail_ops_mlops.pipelines.train_m5 import run
+
+    report = run(config_path=config, horizon=horizon, force=force)
+    rprint(f"[green]OK[/green]: wrote report: {report}")
+
+
+@app.command("eval-m5")
+def eval_m5(
+    config: Annotated[Path, typer.Option("--config")] = DEFAULT_CONFIG_PATH,
+    horizon: Annotated[int, typer.Option("--horizon")] = 28,
+    force: Annotated[bool, typer.Option("--force")] = False,
+) -> None:
+    """Evaluate trained M5 baseline and write figures/tables/reports."""
+    from retail_ops_mlops.pipelines.eval_m5 import run
+
+    report = run(config_path=config, horizon=horizon, force=force)
+    rprint(f"[green]OK[/green]: wrote report: {report}")
 
 
 if __name__ == "__main__":
