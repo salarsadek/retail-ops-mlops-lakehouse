@@ -6,7 +6,8 @@ from pathlib import Path
 
 
 def _powershell_exe() -> str:
-    # CI often has Windows PowerShell ("powershell"); locally it might be "pwsh".
+    # In CI this is usually "powershell"; locally it might be "pwsh".
+    # Try pwsh first if available.
     for cand in ("pwsh", "powershell"):
         try:
             subprocess.run(
@@ -21,21 +22,25 @@ def _powershell_exe() -> str:
 
 
 def _venv_python(root: Path) -> str:
+    # Prefer active venv if set
     venv = os.environ.get("VIRTUAL_ENV")
     if venv:
         cand = Path(venv) / "Scripts" / "python.exe"
         if cand.exists():
             return str(cand)
 
+    # Prefer local .venv
     cand2 = root / ".venv" / "Scripts" / "python.exe"
     if cand2.exists():
         return str(cand2)
 
+    # Fallback
     return "python"
 
 
 def _ensure_minimal_gold(root: Path) -> None:
-    # Minimal placeholder so the pipeline has a gold folder in CI.
+    # Minimal directory so the pipeline has a place to read/write.
+    # If your repo creates gold files elsewhere, keep that logic there.
     gold = root / "data" / "processed" / "m5" / "gold"
     gold.mkdir(parents=True, exist_ok=True)
 
