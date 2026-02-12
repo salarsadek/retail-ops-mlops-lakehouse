@@ -1,62 +1,67 @@
-# retail-ops-mlops-lakehouse
+# Retail Ops MLOps Lakehouse (M5)
 
-PowerShell-robust, cross-platform baseline pipeline for M5-style retail forecasting with:
-- Data quality checks
-- Training + evaluation artifacts (tables/figures/reports)
-- Reproducible local + CI execution
+[![CI](https://github.com/salarsadek/retail-ops-mlops-lakehouse/actions/workflows/ci.yml/badge.svg)](https://github.com/salarsadek/retail-ops-mlops-lakehouse/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/salarsadek/retail-ops-mlops-lakehouse)](https://github.com/salarsadek/retail-ops-mlops-lakehouse/releases)
 
-## Quickstart (Windows PowerShell)
+PowerShell-robust MLOps mini-lakehouse for **M5-style retail forecasting**:
+
+- Reproducible pipeline (ensure dirs → train → eval)
+- Data quality gate
+- LaTeX-friendly outputs (tables/figures)
+- Cross-platform CI (Windows + Ubuntu)
+
+## Quickstart
+
+### Windows (PowerShell)
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -U pip
 pip install -e ".[dev]"
-python -m pre_commit install
 
-# Run end-to-end pipeline
-.\scripts\run_m5.ps1 -Force
+python -m pre_commit run --all-files
+python -m pytest -q
+
+pwsh .\scripts\run_m5.ps1 -Force
 ```
 
-Outputs are written to `outputs/` and sample data is created under `data/processed/m5/gold/`.
-
-## Quickstart (Linux/macOS)
+### Linux/macOS
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
 pip install -e ".[dev]"
-python -m pre_commit install
+
+python -m pre_commit run --all-files
+python -m pytest -q
 
 pwsh ./scripts/run_m5.ps1 -Force
 ```
 
-> Requires PowerShell (`pwsh`) on Linux/macOS.
+## What gets generated?
 
-## Commands
+- **Models:** `outputs/models/`
+- **Tables:** `outputs/tables/` (CSV + optional `.tex`)
+- **Figures:** `outputs/figures/` (PDF + PNG)
+- **Reports:** `outputs/reports/` (JSON summaries)
 
-- Ensure folders:
-  - `python -m retail_ops_mlops.cli ensure-dirs`
-- Train baseline:
-  - `python -m retail_ops_mlops.cli train-m5 --force`
-- Evaluate baseline:
-  - `python -m retail_ops_mlops.cli eval-m5 --force`
+## CLI entrypoints
 
-## Repo structure (high level)
+The PowerShell runner calls these (you can also run them directly):
 
-- `src/retail_ops_mlops/` – library + CLI + pipelines
-- `scripts/run_m5.ps1` – end-to-end runner (cross-platform)
-- `tests/` – smoke test for pipeline runner
-- `outputs/` – generated artifacts (ignored by git)
-- `data/` – raw/interim/processed (raw/processed contents ignored by git)
+```bash
+python -m retail_ops_mlops.cli ensure-dirs
+python -m retail_ops_mlops.cli train-m5 --force
+python -m retail_ops_mlops.cli eval-m5 --force
+```
 
-## CI
+## Notes
 
-GitHub Actions runs:
-- lint/format via pre-commit
-- pytest (ubuntu + windows)
+- The repo is designed to be **PowerShell-first** (robust paths, venv detection, CI friendly).
+- Without `-Force`, scripts may reuse existing outputs when possible.
 
 ## License
 
-MIT (or update as needed).
+MIT (update if you prefer another license).
