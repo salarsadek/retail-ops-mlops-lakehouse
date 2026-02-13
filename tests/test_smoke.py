@@ -6,8 +6,26 @@ from pathlib import Path
 
 
 def _powershell_exe() -> str:
-    # Prefer pwsh if available (GitHub Actions ubuntu), else Windows PowerShell.
-    return os.environ.get("POWERSHELL_EXE", "pwsh")
+    # 1) Explicit override (useful in CI)
+    override = os.environ.get("POWERSHELL_EXE")
+    if override:
+        return override
+
+    # 2) Prefer pwsh if installed (GitHub Actions ubuntu)
+    for exe in ("pwsh", "powershell"):
+        try:
+            subprocess.run(
+                [exe, "-NoProfile", "-Command", "$PSVersionTable.PSVersion"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return exe
+        except Exception:
+            pass
+
+    # 3) Last resort
+    return "powershell"
 
 
 def _venv_python(root: Path) -> str:
