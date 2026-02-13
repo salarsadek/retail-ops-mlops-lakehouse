@@ -1,99 +1,97 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 
 def _powershell_exe() -> str:
-    exe = shutil.which("pwsh")
-    if exe:
-        return exe
-    exe = shutil.which("powershell")
-    if exe:
-        return exe
-    return "pwsh"
+    # Prefer pwsh if available (GitHub Actions ubuntu), else Windows PowerShell.
+    return os.environ.get("POWERSHELL_EXE", "pwsh")
 
 
 def _venv_python(root: Path) -> str:
-    win = root / ".venv" / "Scripts" / "python.exe"
-    if win.exists():
-        return str(win)
+    py = root / ".venv" / "Scripts" / "python.exe"
+    if py.exists():
+        return str(py)
+    # Linux/macOS venv layout (CI ubuntu)
+    py2 = root / ".venv" / "bin" / "python"
+    if py2.exists():
+        return str(py2)
+    # Fallback: rely on PATH (CI uses setup-python)
     return "python"
 
 
 def _ensure_minimal_gold(root: Path) -> None:
-    """
-    Create the minimal parquet file expected by train_m5 pipeline.
+    """Create a small-but-robust gold features parquet for smoke tests.
 
-    Keep this as a *superset* of required columns; extra columns are fine.
+    Goal: ensure eval_m5 has >=2 test rows AFTER dropping NaNs.
+    So we create a longer series with fully-populated lag/rolling columns,
+    and mark the last 10 rows as test.
     """
-    gold_dir = root / "data" / "processed" / "m5" / "gold"
-    gold_dir.mkdir(parents=True, exist_ok=True)
-
-    features_path = gold_dir / "fact_sales_features_sample.parquet"
+    features_path = (
+        root / "data" / "processed" / "m5" / "gold" / "fact_sales_features_sample.parquet"
+    )
 
     py = _venv_python(root)
 
-    code = r"""
-import os
+    # NOTE: use f-string only for the path; keep code as raw python.
+    code = f"""
 from pathlib import Path
 import pandas as pd
 
-path = Path(os.environ["FEATURES_PATH"])
+path = Path(r\"{str(features_path)}\")
 path.parent.mkdir(parents=True, exist_ok=True)
 
-df = pd.DataFrame(
-    {
-        # Required core identifiers/targets
-        "id": ["FOO_1_CA_1", "FOO_1_CA_1", "FOO_1_CA_1"],
-        "d": ["d_1", "d_2", "d_3"],
-        "sales": [10.0, 12.0, 11.0],
-        "d_num": [1, 2, 3],
-        "is_test": [False, False, True],
+n = 60
+dates = pd.date_range("2016-01-01", periods=n, freq="D")
 
-        # Typical categorical dimensions (often used as categoricals)
-        "item_id": ["FOO_1", "FOO_1", "FOO_1"],
-        "dept_id": ["FOO", "FOO", "FOO"],
-        "cat_id": ["FOODS", "FOODS", "FOODS"],
-        "store_id": ["CA_1", "CA_1", "CA_1"],
-        "state_id": ["CA", "CA", "CA"],
+df = pd.DataFrame({{
+    "id": ["FOO_1_CA_1"] * n,
+    "d": [f"d_{{i+1}}" for i in range(n)],
+    "sales": [float(10 + (i % 5)) for i in range(n)],
+    "d_num": list(range(1, n+1)),
+    # last 10 rows are test
+    "is_test": [False] * (n - 10) + [True] * 10,
 
-        # Typical numeric lag/rolling features expected by baseline pipelines
-        "lag_1": [10.0, 10.0, 12.0],
-        "lag_7": [10.0, 10.0, 10.0],
-        "lag_28": [10.0, 10.0, 10.0],
-        "roll_mean_7": [10.0, 10.5, 11.0],
-        "roll_mean_28": [10.0, 10.0, 10.0],
+    # categorical ids expected by pipeline
+    "item_id": ["FOO_1"] * n,
+    "dept_id": ["FOO"] * n,
+    "cat_id": ["FOO"] * n,
+    "store_id": ["CA_1"] * n,
+    "state_id": ["CA"] * n,
 
-        # Time/calendar features
-        "wm_yr_wk": [11101, 11101, 11101],
-        "wday": [1, 2, 3],
-        "month": [1, 1, 1],
-        "year": [2016, 2016, 2016],
+    # lag/rolling features expected by pipeline (pre-filled, no NaNs)
+    "lag_1": [10.0] * n,
+    "lag_7": [10.0] * n,
+    "lag_28": [10.0] * n,
+    "roll_mean_7": [10.0] * n,
+    "roll_mean_28": [10.0] * n,
 
-        # Price / SNAP features (commonly referenced)
-        "sell_price": [1.0, 1.0, 1.0],
-        "snap_CA": [0, 0, 0],
-        "snap_TX": [0, 0, 0],
-        "snap_WI": [0, 0, 0],
+    # calendar-ish
+    "wm_yr_wk": [11111] * n,
+    "wday": [1] * n,
+    "month": [1] * n,
+    "year": [2016] * n,
 
-        # Events (if pipeline expects them)
-        "event_name_1": ["None", "None", "None"],
-        "event_type_1": ["None", "None", "None"],
-        "event_name_2": ["None", "None", "None"],
-        "event_type_2": ["None", "None", "None"],
-    }
-)
+    # price + SNAP
+    "sell_price": [1.0] * n,
+    "snap_CA": [0] * n,
+    "snap_TX": [0] * n,
+    "snap_WI": [0] * n,
+
+    # events
+    "event_name_1": [None] * n,
+    "event_type_1": [None] * n,
+    "event_name_2": [None] * n,
+    "event_type_2": [None] * n,
+}})
 
 df.to_parquet(path, index=False)
 print("WROTE", path)
 """
-    env = os.environ.copy()
-    env["FEATURES_PATH"] = str(features_path)
 
-    subprocess.run([py, "-c", code], check=True, cwd=str(root), env=env)
+    subprocess.run([py, "-c", code], check=True, cwd=str(root))
 
 
 def test_smoke_run_m5_ps1() -> None:
