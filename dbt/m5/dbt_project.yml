@@ -1,0 +1,12 @@
+﻿name: m5
+version: 1.0.0
+config-version: 2
+
+profile: m5
+
+model-paths: ["models"]
+test-paths: ["tests"]
+
+models:
+  m5:
+    +materialized: table

@@ -1,0 +1,14 @@
+﻿version: 2
+
+models:
+  - name: stg_m5_gold
+    description: "Staging view reading the M5 gold features parquet."
+    columns:
+      - name: id
+        tests: [not_null]
+      - name: d
+        tests: [not_null]
+      - name: sales
+        tests: [not_null]
+      - name: is_test
+        tests: [not_null]

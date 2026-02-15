@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$Force,
   [string]$PythonExe = ""
 )
@@ -109,3 +109,35 @@ Write-Host "`n== sanity: metrics preview ==" -ForegroundColor Cyan
 Get-Content ".\outputs\tables\eval_m5_metrics.csv" -Raw
 
 Write-Host "`nOK: run completed" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "== dbt: run + test (duckdb) ==" -ForegroundColor Cyan
+
+# --- robust python/dbt detection ---
+$pyForDbt = $null
+if ($PSBoundParameters.ContainsKey("PythonExe") -and $PythonExe) { $pyForDbt = $PythonExe }
+elseif ($PythonExe) { $pyForDbt = $PythonExe }
+elseif (Test-Path ".\.venv\Scripts\python.exe") { $pyForDbt = (Resolve-Path ".\.venv\Scripts\python.exe").Path }
+elseif (Get-Command python -ErrorAction SilentlyContinue) { $pyForDbt = "python" }
+else { throw "Could not determine python executable for dbt." }
+
+$pyDir = Split-Path $pyForDbt -Parent
+$dbt = Join-Path $pyDir "dbt.exe"
+if (-not (Test-Path $dbt)) {
+    $dbtAlt = Join-Path $pyDir "dbt"
+    if (Test-Path $dbtAlt) { $dbt = $dbtAlt }
+    else { throw "dbt executable not found next to python. Expected $dbt (or dbt)." }
+}
+# --- end robust python/dbt detection ---
+if (-not (Test-Path $dbt)) {
+    throw "dbt.exe not found next to PythonExe. Expected: $dbt"
+}
+
+# Ensure dbt outputs dir exists (duckdb file path lives under outputs/dbt)
+New-Item -ItemType Directory -Force -Path ".\outputs\dbt" | Out-Null
+
+& $dbt run  --project-dir .\dbt\m5 --profiles-dir .\dbt
+if ($LASTEXITCODE -ne 0) { throw "dbt run failed (exit=$LASTEXITCODE)" }
+
+& $dbt test --project-dir .\dbt\m5 --profiles-dir .\dbt
+if ($LASTEXITCODE -ne 0) { throw "dbt test failed (exit=$LASTEXITCODE)" }

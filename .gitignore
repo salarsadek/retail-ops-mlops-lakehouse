@@ -26,3 +26,9 @@ Thumbs.db
 .env.*
 
 *.bak
+
+# --- dbt (build artifacts) ---
+dbt/**/target/
+dbt/**/logs/
+dbt/.user.yml
+# --- end dbt ---

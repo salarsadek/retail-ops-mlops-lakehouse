@@ -1,0 +1,7 @@
+﻿m5:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ./outputs/dbt/m5.duckdb
+      threads: 2
