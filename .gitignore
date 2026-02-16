@@ -32,3 +32,11 @@ dbt/**/target/
 dbt/**/logs/
 dbt/.user.yml
 # --- end dbt ---
+
+# dbt build artifacts (do not commit)
+dbt/**/target/
+dbt/**/logs/
+dbt/**/.user.yml
+
+# dbt local database (stored under outputs/)
+outputs/dbt/
